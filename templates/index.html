@@ -1,11 +1,20 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>VPS App</title>
-</head>
-<body>
-    <h1>Hello from my VPS</h1>
-    <p>Here is some really fun html because why not</p>
-</body>
+  <head>
+    <meta charset="utf-8">
+    <title>Daily Balance</title>
+  </head>
+  <body>
+    <h1>Daily Balances</h1>
+
+    {% if balances %}
+      <ul>
+        {% for b in balances %}
+          <li>{{ b.balance_date }} — ${{ b.balance }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No balance data yet.</p>
+    {% endif %}
+  </body>
 </html>
