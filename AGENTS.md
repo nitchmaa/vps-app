@@ -54,3 +54,22 @@ Non-Goals (for v1):
 - Multiple accounts
 - Real-time email polling
 - Docker
+
+## Data Ingestion & Future Scope
+
+Long-term Vision:
+- This project may eventually ingest multiple types of email-based data
+  (balances, transactions, bills, reminders, etc.)
+- The system is expected to grow into a general personal tracking system
+  (finance, tasks, projects).
+
+Architecture Rules:
+- Email ingestion must be isolated from Flask routes
+- Ingestion sources (IMAP, Gmail API, others) must be swappable
+- Core database models should not depend on email protocol details
+- Prefer normalized “event-like” records over tightly coupled schemas
+
+Current Scope (v1):
+- Only daily balance ingestion is in scope
+- IMAP is acceptable for v1 ingestion
+- No generalized transaction or bill tracking yet
