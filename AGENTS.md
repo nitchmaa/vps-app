@@ -29,3 +29,28 @@ The app is run in production using Gunicorn and managed by systemd.
 - Prefer incremental changes over rewrites.
 - Ask before changing architecture.
 - Assume this project is meant to grow, not be reset.
+
+## Feature: Daily Balance Tracking (v1)
+
+Goal:
+- Read a daily balance email
+- Store one balance per day
+- Display balances on the dashboard
+
+Architecture Rules:
+- app.py remains thin (routes + rendering only)
+- Email logic must live outside app.py
+- Database access must be centralized
+- SQLite is acceptable for v1
+- No background threads inside Flask routes
+
+Data Flow:
+- Email ingestion runs separately from web requests
+- Flask only reads from the database
+- One row per day, idempotent inserts
+
+Non-Goals (for v1):
+- Charts
+- Multiple accounts
+- Real-time email polling
+- Docker
