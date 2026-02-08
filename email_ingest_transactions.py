@@ -9,22 +9,42 @@ from email.message import Message
 
 from db_transactions import init_transactions_table, upsert_transaction
 
-# ===== Configuration (env vars) =====
+
+# =========================
+# Environment configuration
+# =========================
+
 EMAIL_FROM = os.getenv("EMAIL_FROM", "").strip()
 EMAIL_SUBJECT_KEYWORD = os.getenv("TRANSACTION_SUBJECT_KEYWORD", "").strip()
 
-# Regex patterns
+# =========================
+# Regex patterns (USAA)
+# =========================
+
 AMOUNT_REGEX = re.compile(r"\$([\d]+\.\d{2})")
 DATE_REGEX = re.compile(r"Date:\s*(\d{2}/\d{2}/\d{2})")
-MERCHANT_REGEX = re.compile(r"To:\s*([A-Z0-9 \-]+)")
-ACCOUNT_LAST4_REGEX = re.compile(r"ending in\s*(\d{4})", re.IGNORECASE)
 
+# Capture everything between "To:" and "Date:", including newlines
+MERCHANT_REGEX = re.compile(
+    r"To:\s*([\s\S]+?)\s*Date:",
+    re.IGNORECASE,
+)
+
+ACCOUNT_LAST4_REGEX = re.compile(
+    r"ending in\s*(\d{4})",
+    re.IGNORECASE,
+)
+
+
+# =========================
+# Helpers
+# =========================
 
 def require_env(name: str) -> str:
-    val = os.getenv(name, "").strip()
-    if not val:
+    value = os.getenv(name, "").strip()
+    if not value:
         raise RuntimeError(f"Missing required environment variable: {name}")
-    return val
+    return value
 
 
 def get_imap_config() -> tuple[str, int, str, str, str]:
@@ -54,11 +74,7 @@ def extract_text_from_message(msg: Message) -> str:
     return decode_payload(msg)
 
 
-def find_latest_matching_message(
-    client: imaplib.IMAP4_SSL,
-    sender: str,
-    subject_keyword: str,
-) -> bytes:
+def find_latest_matching_message(client, sender, subject_keyword) -> bytes:
     status, data = client.search(
         None,
         "FROM",
@@ -66,69 +82,74 @@ def find_latest_matching_message(
         "SUBJECT",
         f'"{subject_keyword}"',
     )
-    if status != "OK":
-        raise RuntimeError("Failed to search mailbox")
-    ids = data[0].split()
-    if not ids:
+    if status != "OK" or not data or not data[0]:
         raise RuntimeError("No matching transaction emails found")
-    return ids[-1]
+    return data[0].split()[-1]
 
 
-def parse_transaction(email_body: str) -> tuple[str, float, str, str | None]:
+def parse_transaction(body: str):
     # Date
-    date_match = DATE_REGEX.search(email_body)
+    date_match = DATE_REGEX.search(body)
     if not date_match:
-        raise RuntimeError("Could not find transaction date")
-    dt_str = date_match.group(1)
-    dt = datetime.strptime(dt_str, "%m/%d/%y").date().isoformat()
+        raise RuntimeError("Could not parse transaction date")
+
+    transaction_date = datetime.strptime(
+        date_match.group(1),
+        "%m/%d/%y",
+    ).date().isoformat()
 
     # Amount
-    amt_match = AMOUNT_REGEX.search(email_body)
+    amt_match = AMOUNT_REGEX.search(body)
     if not amt_match:
-        raise RuntimeError("Could not find amount")
+        raise RuntimeError("Could not parse transaction amount")
+
     amount = float(amt_match.group(1))
 
-    # Merchant
-    merch_match = MERCHANT_REGEX.search(email_body)
+    # Merchant (multiline-safe)
+    merch_match = MERCHANT_REGEX.search(body)
     if not merch_match:
-        raise RuntimeError("Could not find merchant")
-    merchant = merch_match.group(1).strip()
+        raise RuntimeError("Could not parse merchant")
 
-    # Account last 4
-    acct_match = ACCOUNT_LAST4_REGEX.search(email_body)
-    last4 = acct_match.group(1) if acct_match else None
+    merchant = " ".join(merch_match.group(1).split())
 
-    # Direction is always debit for now
+    # Account last 4 (optional)
+    acct_match = ACCOUNT_LAST4_REGEX.search(body)
+    account_last4 = acct_match.group(1) if acct_match else None
+
     direction = "debit"
 
-    return dt, amount, direction, merchant, last4
+    return transaction_date, amount, direction, merchant, account_last4
 
+
+# =========================
+# Main
+# =========================
 
 def main() -> None:
-    # Validate config
     if not EMAIL_FROM or not EMAIL_SUBJECT_KEYWORD:
         raise RuntimeError(
-            "Please set EMAIL_FROM and TRANSACTION_SUBJECT_KEYWORD environment variables"
+            "EMAIL_FROM and TRANSACTION_SUBJECT_KEYWORD must be set"
         )
 
     host, port, username, password, mailbox = get_imap_config()
 
     with imaplib.IMAP4_SSL(host, port) as client:
         client.login(username, password)
-        status, _ = client.select(mailbox, readonly=True)
-        if status != "OK":
-            raise RuntimeError(f"Unable to open mailbox: {mailbox}")
+        client.select(mailbox, readonly=True)
 
         msg_id = find_latest_matching_message(
-            client, EMAIL_FROM, EMAIL_SUBJECT_KEYWORD
+            client,
+            EMAIL_FROM,
+            EMAIL_SUBJECT_KEYWORD,
         )
+
         status, data = client.fetch(msg_id, "(RFC822)")
         if status != "OK" or not data or data[0] is None:
             raise RuntimeError("Failed to fetch transaction email")
 
         raw_email = data[0][1]
         msg = email.message_from_bytes(raw_email)
-        body_text = extract_text_from_message(msg)
+        body = extract_text_from_message(msg)
 
         (
             transaction_date,
@@ -136,9 +157,8 @@ def main() -> None:
             direction,
             merchant,
             account_last4,
-        ) = parse_transaction(body_text)
+        ) = parse_transaction(body)
 
-    # Insert
     init_transactions_table()
     upsert_transaction(
         transaction_date,
@@ -148,9 +168,10 @@ def main() -> None:
         account_last4,
         EMAIL_FROM,
     )
+
     print(
-        f"Stored transaction: {transaction_date} | {direction} | "
-        f"{amount} | {merchant}"
+        f"Stored transaction: {transaction_date} | "
+        f"{direction} | {amount} | {merchant}"
     )
 
 
