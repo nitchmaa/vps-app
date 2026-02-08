@@ -73,3 +73,12 @@ Current Scope (v1):
 - Only daily balance ingestion is in scope
 - IMAP is acceptable for v1 ingestion
 - No generalized transaction or bill tracking yet
+
+## Server-Level Configuration Rules
+
+- systemd unit files are deployment artifacts
+- Real unit files live only on the server
+- Templates/examples must live in the repo
+- Secrets must never be committed
+- Background work must never run inside Flask routes
+- Background jobs must be observable via systemd logs

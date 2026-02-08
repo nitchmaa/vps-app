@@ -1,0 +1,22 @@
+[Unit]
+Description=Daily balance email ingestion
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/vps-app
+ExecStart=/root/vps-app/.venv/bin/python /root/vps-app/email_ingest.py
+
+# Environment variables (set securely on the server)
+# EMAIL_HOST=
+# EMAIL_PORT=
+# EMAIL_USER=
+# EMAIL_PASSWORD=
+# EMAIL_FROM=
+# EMAIL_SUBJECT_KEYWORD=
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+Nice=10

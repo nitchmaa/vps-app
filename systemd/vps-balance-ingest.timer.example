@@ -1,0 +1,10 @@
+[Unit]
+Description=Run daily balance ingestion once per day
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

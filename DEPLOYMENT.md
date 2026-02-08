@@ -39,3 +39,19 @@ journalctl -u vps-app -n 50 --no-pager
 ### Update code
 git pull
 sudo systemctl restart vps-app
+
+## Background Jobs
+
+This project uses systemd timers for background ingestion tasks.
+
+Active jobs:
+- `vps-balance-ingest.timer`
+  - Runs `email_ingest.py` once per day
+  - Ingests daily balance emails
+  - Writes to SQLite database
+
+Systemd unit files live in:
+- `/etc/systemd/system/` on the server
+
+Template/example unit files are stored in the repo under:
+- `/systemd/`
